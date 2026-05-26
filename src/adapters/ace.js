@@ -63,15 +63,16 @@ export class AceAdapter {
   }
 
   async callAceService(serviceName, prompt, context) {
+    const normalizedServiceName = normalizeServiceName(serviceName);
     if (this.mode !== "live") {
-      return fakeAceResult(serviceName, prompt, context);
+      return fakeAceResult(normalizedServiceName, prompt, context);
     }
 
-    const response = await this.invokeConfiguredService(serviceName, prompt, context);
+    const response = await this.invokeConfiguredService(normalizedServiceName, prompt, context);
 
     return {
       mode: "live",
-      serviceName,
+      serviceName: normalizedServiceName,
       requestId: response?.id ?? null,
       x402Tx:
         response?.headers?.x402_tx ??
@@ -86,7 +87,7 @@ export class AceAdapter {
   }
 
   async invokeConfiguredService(serviceName, prompt, context) {
-    if (serviceName === "openai.chat.completions") {
+    if (serviceName === "ai-chat" || serviceName === "openai.chat.completions") {
       return this.client.openai.chat.completions.create({
         model: config.ace.openaiModel,
         messages: [
@@ -99,6 +100,14 @@ export class AceAdapter {
         ],
         max_tokens: 300
       });
+    }
+
+    if (typeof this.client.runSkill === "function") {
+      return this.client.runSkill(serviceName, bodyForService(serviceName, prompt, context));
+    }
+
+    if (typeof this.client.skill === "function") {
+      return this.client.skill(serviceName, bodyForService(serviceName, prompt, context));
     }
 
     const target = serviceName.split(".").reduce((node, key) => node?.[key], this.client);
@@ -148,10 +157,17 @@ function fakeAceResult(serviceName, prompt, context) {
 }
 
 function bodyForService(serviceName, prompt, context) {
-  if (serviceName.includes("serpapi")) {
+  if (serviceName.includes("google-search") || serviceName.includes("exa-search")) {
     return {
       q: `${context.candidate?.name ?? "SAP agent"} ${context.candidate?.tool?.name ?? ""}`,
       query: `${context.candidate?.name ?? "SAP agent"} ${context.candidate?.tool?.name ?? ""}`
+    };
+  }
+
+  if (serviceName.includes("github")) {
+    return {
+      query: "OOBE-PROTOCOL synapse SAP SDK agent escrow x402",
+      prompt
     };
   }
 
@@ -162,4 +178,8 @@ function bodyForService(serviceName, prompt, context) {
   }
 
   return { prompt };
+}
+
+function normalizeServiceName(serviceName) {
+  return String(serviceName).trim().replace(/^\/+/, "");
 }

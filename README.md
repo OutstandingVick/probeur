@@ -56,9 +56,9 @@ AGENT_MODE=live
 SAP_RPC_URL=https://us-1-mainnet.oobeprotocol.ai/rpc?api_key=...
 SAP_AGENT_KEYPAIR_PATH=keys/agent.json
 X402B_SOLANA_PAYER_PRIVATE_KEY=...
-ACE_SERVICE_SUMMARY=openai.chat.completions
-ACE_SERVICE_RESEARCH=serpapi.search
-ACE_SERVICE_RANKING=midjourney.imagine
+ACE_SERVICE_SUMMARY=ai-chat
+ACE_SERVICE_RESEARCH=google-search
+ACE_SERVICE_RANKING=github
 ```
 
 6. Register and run:

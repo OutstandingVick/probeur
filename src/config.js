@@ -51,9 +51,9 @@ export const config = {
     openaiModel: process.env.ACE_OPENAI_MODEL ?? "gpt-4o-mini",
     solanaPayerPrivateKey: process.env.X402B_SOLANA_PAYER_PRIVATE_KEY ?? "",
     services: {
-      summary: process.env.ACE_SERVICE_SUMMARY ?? "openai.chat.completions",
-      research: process.env.ACE_SERVICE_RESEARCH ?? "serpapi.search",
-      ranking: process.env.ACE_SERVICE_RANKING ?? "midjourney.imagine"
+      summary: process.env.ACE_SERVICE_SUMMARY ?? "ai-chat",
+      research: process.env.ACE_SERVICE_RESEARCH ?? "google-search",
+      ranking: process.env.ACE_SERVICE_RANKING ?? "github"
     }
   },
   run: {
