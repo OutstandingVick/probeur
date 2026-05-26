@@ -1,0 +1,26 @@
+{
+  "name": "probeur",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Probeur: an autonomous SAP tool auditor for the OOBE Protocol x Ace Data Cloud bounty.",
+  "scripts": {
+    "start": "node src/index.js start",
+    "once": "node src/index.js once",
+    "demo": "node src/index.js demo",
+    "report": "node src/report.js",
+    "check": "node --check src/index.js && node --check src/config.js && node --check src/report.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "optionalDependencies": {
+    "@acedatacloud/sdk": "latest",
+    "@acedatacloud/x402-client": "latest",
+    "@coral-xyz/anchor": "latest",
+    "@oobe-protocol-labs/synapse-sap-sdk": "latest",
+    "@solana/web3.js": "latest",
+    "bn.js": "latest",
+    "bs58": "latest"
+  }
+}
