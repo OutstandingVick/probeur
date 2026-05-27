@@ -102,7 +102,7 @@ export class SapAdapter {
 
     const wallet = this.keypair.publicKey;
     const [agent] = this.sdk.Pdas.getAgentPDA(wallet);
-    const [agentStats] = this.sdk.Pdas.getAgentStatsPDA(wallet);
+    const [agentStats] = this.getAgentStatsPDA(agent);
     const [globalRegistry] = this.sdk.Pdas.getGlobalPDA();
     const existing = await this.client.fetchAccount("agent", agent);
 
@@ -134,6 +134,13 @@ export class SapAdapter {
     });
     const signature = await this.sendRegistrationInstruction(ix, wallet);
     return { mode: "live", wallet: this.wallet, tx: signature, agent: agent.toBase58(), manifest };
+  }
+
+  getAgentStatsPDA(agent) {
+    return this.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from(this.sdk.SEEDS.AGENT_STATS), agent.toBuffer()],
+      new this.web3.PublicKey(this.sdk.PROGRAM_ID)
+    );
   }
 
   async sendRegistrationInstruction(ix, wallet) {
