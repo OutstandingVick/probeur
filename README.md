@@ -54,6 +54,7 @@ npm install
 ```bash
 AGENT_MODE=live
 SAP_RPC_URL=https://us-1-mainnet.oobeprotocol.ai/rpc?api_key=...
+SAP_SEND_RPC_URL=https://api.mainnet-beta.solana.com
 SAP_AGENT_KEYPAIR_PATH=keys/agent.json
 X402B_SOLANA_PAYER_PRIVATE_KEY=...
 ACE_SERVICE_SUMMARY=ai-chat

@@ -39,6 +39,7 @@ export const config = {
   sap: {
     cluster: process.env.SAP_CLUSTER ?? "mainnet-beta",
     rpcUrl: process.env.SAP_RPC_URL ?? "",
+    sendRpcUrl: process.env.SAP_SEND_RPC_URL ?? process.env.SAP_RPC_URL ?? "",
     sentinelWallet:
       process.env.SYNAPSE_SENTINEL_WALLET ??
       "Ccr2yK3hLALU4p8oNRqrh4dGuvPJTth5KCLMio8cE1ph",

@@ -64,6 +64,7 @@ export class SapAdapter {
     this.sdk = sap;
     this.web3 = web3;
     this.keypair = keypair;
+    this.walletAdapter = wallet;
     this.client = sap.createSapClient(config.sap.rpcUrl, wallet);
     this.wallet = keypair.publicKey.toBase58();
   }
@@ -131,11 +132,29 @@ export class SapAdapter {
       agentUri: "https://github.com/nedupowei22/probeur",
       x402Endpoint: null
     });
-    const tx = await this.client.buildTransaction([ix], wallet);
+    const signature = await this.sendRegistrationInstruction(ix, wallet);
+    return { mode: "live", wallet: this.wallet, tx: signature, agent: agent.toBase58(), manifest };
+  }
+
+  async sendRegistrationInstruction(ix, wallet) {
+    try {
+      return await this.buildSignSend([ix], wallet);
+    } catch (error) {
+      if (!isLaggingRpcError(error) || config.sap.sendRpcUrl === config.sap.rpcUrl) {
+        throw error;
+      }
+
+      this.client = this.sdk.createSapClient(config.sap.sendRpcUrl, this.walletAdapter);
+      return this.buildSignSend([ix], wallet);
+    }
+  }
+
+  async buildSignSend(ixs, wallet) {
+    const tx = await this.client.buildTransaction(ixs, wallet);
     tx.sign([this.keypair]);
     const signature = await this.client.connection.sendTransaction(tx, { maxRetries: 3 });
     await this.client.connection.confirmTransaction(signature, "confirmed");
-    return { mode: "live", wallet: this.wallet, tx: signature, agent: agent.toBase58(), manifest };
+    return signature;
   }
 
   async discoverAgents() {
@@ -222,4 +241,9 @@ function normalizeProfile(wallet, profile) {
       priceLamports: Number(tool.priceLamports ?? tool.pricePerCall ?? 0)
     }))
   };
+}
+
+function isLaggingRpcError(error) {
+  const message = String(error?.transactionMessage ?? error?.message ?? "");
+  return message.includes("Node is behind") || message.includes("behind by");
 }
