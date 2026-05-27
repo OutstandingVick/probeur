@@ -72,9 +72,22 @@ async function runOnce({ mode = config.mode } = {}) {
   return run;
 }
 
+async function registerOnly({ mode = config.mode } = {}) {
+  const sap = new SapAdapter({ mode });
+  await sap.init();
+  const registration = await sap.registerAgent();
+  return { mode, registration };
+}
+
 async function main() {
   const command = process.argv[2] ?? "once";
   const mode = command === "demo" ? "dry-run" : config.mode;
+
+  if (command === "register") {
+    const result = await registerOnly({ mode });
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
 
   if (command === "start") {
     await runOnce({ mode });

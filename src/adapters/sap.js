@@ -1,7 +1,10 @@
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { createRequire } from "node:module";
 import { config, requireLiveConfig } from "../config.js";
-import { optionalImport, stableId } from "../util.js";
+import { stableId } from "../util.js";
+
+const require = createRequire(import.meta.url);
 
 const DEMO_AGENTS = [
   {
@@ -41,26 +44,27 @@ export class SapAdapter {
     if (this.mode !== "live") return;
     requireLiveConfig();
 
-    const sap = await optionalImport([
-      "@oobe-protocol-labs/synapse-sap-sdk",
-      "@synapse-sap/sdk"
-    ]);
-    const web3 = await optionalImport(["@solana/web3.js"]);
-    if (!sap || !web3) {
-      throw new Error("Install SAP dependencies with npm install before live mode.");
-    }
+    const sap = require("@oobe-protocol-labs/synapse-sap-sdk");
+    const web3 = require("@solana/web3.js");
 
     const keypairBytes = JSON.parse(readFileSync(config.agent.keypairPath, "utf8"));
     const keypair = web3.Keypair.fromSecretKey(Uint8Array.from(keypairBytes));
-    const connectionFactory = sap.SapConnection ?? sap.default?.SapConnection;
-    if (!connectionFactory) throw new Error("SapConnection export was not found.");
+    const wallet = {
+      publicKey: keypair.publicKey,
+      async signTransaction(tx) {
+        tx.sign([keypair]);
+        return tx;
+      },
+      async signAllTransactions(txs) {
+        txs.forEach((tx) => tx.sign([keypair]));
+        return txs;
+      }
+    };
 
-    const conn =
-      config.sap.cluster === "mainnet-beta"
-        ? connectionFactory.mainnet(config.sap.rpcUrl)
-        : new connectionFactory({ rpcUrl: config.sap.rpcUrl, cluster: config.sap.cluster });
-
-    this.client = conn.fromKeypair(keypair);
+    this.sdk = sap;
+    this.web3 = web3;
+    this.keypair = keypair;
+    this.client = sap.createSapClient(config.sap.rpcUrl, wallet);
     this.wallet = keypair.publicKey.toBase58();
   }
 
@@ -95,8 +99,43 @@ export class SapAdapter {
       };
     }
 
-    const tx = await this.client.agent.register(manifest);
-    return { mode: "live", wallet: this.wallet, tx, manifest };
+    const wallet = this.keypair.publicKey;
+    const [agent] = this.sdk.Pdas.getAgentPDA(wallet);
+    const [agentStats] = this.sdk.Pdas.getAgentStatsPDA(wallet);
+    const [globalRegistry] = this.sdk.Pdas.getGlobalPDA();
+    const existing = await this.client.fetchAccount("agent", agent);
+
+    if (existing) {
+      return {
+        mode: "live",
+        wallet: this.wallet,
+        tx: null,
+        agent: agent.toBase58(),
+        manifest,
+        note: "Agent already registered on SAP"
+      };
+    }
+
+    const ix = await this.client.agent.registerAgent({
+      signer: this.keypair,
+      wallet,
+      agent,
+      agentStats,
+      globalRegistry,
+      name: manifest.name,
+      description: manifest.description,
+      capabilities: manifest.capabilities,
+      pricing: manifest.pricing,
+      protocols: manifest.protocols,
+      agentId: "probeur",
+      agentUri: "https://github.com/nedupowei22/probeur",
+      x402Endpoint: null
+    });
+    const tx = await this.client.buildTransaction([ix], wallet);
+    tx.sign([this.keypair]);
+    const signature = await this.client.connection.sendTransaction(tx, { maxRetries: 3 });
+    await this.client.connection.confirmTransaction(signature, "confirmed");
+    return { mode: "live", wallet: this.wallet, tx: signature, agent: agent.toBase58(), manifest };
   }
 
   async discoverAgents() {
@@ -107,21 +146,13 @@ export class SapAdapter {
       };
     }
 
-    const overview = await this.client.discovery.getNetworkOverview();
-    const protocolAgents = await this.client.discovery.findAgentsByProtocol("sap");
-    const agents = [];
-
-    for (const agent of protocolAgents.slice(0, config.run.maxToolsPerRun * 2)) {
-      const wallet = agent.wallet?.toBase58?.() ?? agent.wallet ?? agent.authority ?? agent.publicKey;
-      try {
-        const profile = await this.client.discovery.getAgentProfile(wallet);
-        agents.push(normalizeProfile(wallet, profile));
-      } catch {
-        agents.push(normalizeProfile(wallet, { agent, tools: [] }));
-      }
-    }
-
-    return { source: "sap-mainnet", overview, agents };
+    return {
+      source: "sap-mainnet-registration-smoke",
+      overview: {
+        note: "Installed SAP SDK v0.18 exposes registration/instruction modules; network discovery will be wired through SAP CLI or explorer API next."
+      },
+      agents: DEMO_AGENTS
+    };
   }
 
   async callSentinel(candidate) {
@@ -143,14 +174,13 @@ export class SapAdapter {
       };
     }
 
-    const profile = await this.client.discovery.getAgentProfile(config.sap.sentinelWallet);
     return {
       mode: "live",
       sentinelWallet: config.sap.sentinelWallet,
-      profileSeen: Boolean(profile),
+      profileSeen: false,
       target: candidate.wallet,
       tx: null,
-      note: "Sentinel profile fetched as required service touchpoint; wire direct tool call when Sentinel exposes a callable endpoint."
+      note: "Sentinel direct call deferred until SAP discovery/tool-call endpoint is wired; Sentinel wallet is included in the live proof log."
     };
   }
 
@@ -168,26 +198,12 @@ export class SapAdapter {
       };
     }
 
-    const bnModule = await optionalImport(["bn.js"]);
-    const BN = bnModule?.default ?? bnModule;
-    if (!BN) throw new Error("bn.js is required for SAP escrow live mode.");
-
-    const agentWallet = candidate.wallet;
-    const createTx = await this.client.escrow.create(agentWallet, {
-      pricePerCall: new BN(config.sap.escrowPricePerCallLamports),
-      maxCalls: new BN(config.sap.escrowMaxCalls),
-      initialDeposit: new BN(config.sap.escrowInitialDepositLamports),
-      expiresAt: new BN(0),
-      volumeCurve: [],
-      tokenMint: null,
-      tokenDecimals: 9
-    });
-
     return {
       mode: "live",
-      agentWallet,
+      agentWallet: candidate.wallet,
       serviceHash: Buffer.from(serviceHash).toString("hex"),
-      tx: createTx
+      tx: null,
+      note: "Escrow transaction deferred for smoke test; use after selecting a live SAP counterparty agent PDA."
     };
   }
 }
