@@ -80,14 +80,43 @@ export class AceAdapter {
         response?.x402_tx ??
         null,
       output:
+        response?.answer ??
         response?.choices?.[0]?.message?.content ??
         response?.data?.choices?.[0]?.message?.content ??
+        response?.results?.[0]?.title ??
         JSON.stringify(response)
     };
   }
 
   async invokeConfiguredService(serviceName, prompt, context) {
-    if (serviceName === "ai-chat" || serviceName === "openai.chat.completions") {
+    if (serviceName === "ai-chat") {
+      return this.client.aichat.create({
+        model: config.ace.openaiModel,
+        question: prompt,
+        stateful: false
+      });
+    }
+
+    if (serviceName === "google-search") {
+      return this.client.search.google(bodyForService(serviceName, prompt, context));
+    }
+
+    if (serviceName === "github") {
+      return this.client.openai.chat.completions.create({
+        model: config.ace.openaiModel,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are Probeur's GitHub analysis skill. Evaluate repositories and code signals concisely."
+          },
+          { role: "user", content: prompt }
+        ],
+        max_tokens: 300
+      });
+    }
+
+    if (serviceName === "openai.chat.completions") {
       return this.client.openai.chat.completions.create({
         model: config.ace.openaiModel,
         messages: [
@@ -100,14 +129,6 @@ export class AceAdapter {
         ],
         max_tokens: 300
       });
-    }
-
-    if (typeof this.client.runSkill === "function") {
-      return this.client.runSkill(serviceName, bodyForService(serviceName, prompt, context));
-    }
-
-    if (typeof this.client.skill === "function") {
-      return this.client.skill(serviceName, bodyForService(serviceName, prompt, context));
     }
 
     const target = serviceName.split(".").reduce((node, key) => node?.[key], this.client);
