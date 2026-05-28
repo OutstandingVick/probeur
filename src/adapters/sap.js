@@ -132,8 +132,20 @@ export class SapAdapter {
       agentUri: "https://github.com/nedupowei22/probeur",
       x402Endpoint: null
     });
-    const signature = await this.sendRegistrationInstruction(ix, wallet);
-    return { mode: "live", wallet: this.wallet, tx: signature, agent: agent.toBase58(), manifest };
+    try {
+      const signature = await this.sendRegistrationInstruction(ix, wallet);
+      return { mode: "live", wallet: this.wallet, tx: signature, agent: agent.toBase58(), manifest };
+    } catch (error) {
+      if (!isAlreadyRegisteredError(error)) throw error;
+      return {
+        mode: "live",
+        wallet: this.wallet,
+        tx: null,
+        agent: agent.toBase58(),
+        manifest,
+        note: "Agent already registered on SAP"
+      };
+    }
   }
 
   getAgentStatsPDA(agent) {
@@ -253,4 +265,10 @@ function normalizeProfile(wallet, profile) {
 function isLaggingRpcError(error) {
   const message = String(error?.transactionMessage ?? error?.message ?? "");
   return message.includes("Node is behind") || message.includes("behind by");
+}
+
+function isAlreadyRegisteredError(error) {
+  const message = String(error?.transactionMessage ?? error?.message ?? "");
+  const logs = Array.isArray(error?.transactionLogs) ? error.transactionLogs.join("\n") : "";
+  return message.includes("already in use") || logs.includes("already in use");
 }

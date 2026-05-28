@@ -1,5 +1,6 @@
+import { readFileSync } from "node:fs";
 import { config, requireLiveConfig } from "../config.js";
-import { optionalImport, stableId } from "../util.js";
+import { appendJsonl, optionalImport, stableId } from "../util.js";
 
 export class AceAdapter {
   constructor({ mode = config.mode } = {}) {
@@ -25,11 +26,13 @@ export class AceAdapter {
       throw new Error("AceDataCloud SDK exports were not found.");
     }
 
+    const paymentOptions = { network: config.ace.network };
+    if (config.ace.network === "solana") {
+      paymentOptions.solanaWallet = await createSolanaWalletAdapter(config.agent.keypairPath);
+    }
+
     this.client = new AceDataCloud({
-      paymentHandler: createX402PaymentHandler({
-        network: config.ace.network,
-        solanaPrivateKey: config.ace.solanaPayerPrivateKey
-      })
+      paymentHandler: createX402PaymentHandler(paymentOptions)
     });
   }
 
@@ -70,7 +73,7 @@ export class AceAdapter {
 
     const response = await this.invokeConfiguredService(normalizedServiceName, prompt, context);
 
-    return {
+    const result = {
       mode: "live",
       serviceName: normalizedServiceName,
       requestId: response?.id ?? null,
@@ -86,6 +89,8 @@ export class AceAdapter {
         response?.results?.[0]?.title ??
         JSON.stringify(response)
     };
+    appendJsonl("data/ace-proof.jsonl", result);
+    return result;
   }
 
   async invokeConfiguredService(serviceName, prompt, context) {
@@ -203,4 +208,23 @@ function bodyForService(serviceName, prompt, context) {
 
 function normalizeServiceName(serviceName) {
   return String(serviceName).trim().replace(/^\/+/, "");
+}
+
+async function createSolanaWalletAdapter(keypairPath) {
+  const web3 = await optionalImport(["@solana/web3.js"]);
+  if (!web3) throw new Error("@solana/web3.js is required for Solana x402 payments.");
+
+  const keypairBytes = JSON.parse(readFileSync(keypairPath, "utf8"));
+  const keypair = web3.Keypair.fromSecretKey(Uint8Array.from(keypairBytes));
+
+  return {
+    publicKey: keypair.publicKey,
+    async signAndSendTransaction(tx) {
+      tx.sign(keypair);
+      const connection = new web3.Connection(config.sap.sendRpcUrl || config.sap.rpcUrl, "confirmed");
+      const signature = await connection.sendRawTransaction(tx.serialize(), { maxRetries: 3 });
+      await connection.confirmTransaction(signature, "confirmed");
+      return signature;
+    }
+  };
 }
