@@ -9,8 +9,11 @@
     "once": "node src/index.js once",
     "demo": "node src/index.js demo",
     "report": "node src/report.js",
-    "check": "node --check src/index.js && node --check src/config.js && node --check src/report.js && node --check src/adapters/ace.js && node --check src/adapters/sap.js",
-    "register": "node src/index.js register"
+    "check": "node --check src/index.js && node --check src/config.js && node --check src/report.js && node --check src/adapters/ace.js && node --check src/adapters/sap.js && node --check src/ace-proof.js",
+    "register": "node src/index.js register",
+    "ace:ai": "node src/ace-proof.js ai-chat",
+    "ace:google": "node src/ace-proof.js google-search",
+    "ace:github": "node src/ace-proof.js github"
   },
   "engines": {
     "node": ">=18"
